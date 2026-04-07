@@ -308,8 +308,9 @@
   <div class="best" id="bestScore">Personal Best: <span>0</span></div>
 
   <div class="instructions">
-    Tap the button, then dap within 3 seconds.<br>
-    Hold phone close for best results.
+    Tap the button → wait for countdown → DAP when you see 🔥<br>
+    Hold phone close for best results.<br><br>
+    v0.3.1 · Koster Games LLC™
   </div>
 </div>
 
@@ -347,15 +348,39 @@
   }
 
   // --- AUDIO SETUP ---
+  // We disable browser audio processing (echo cancel, noise suppression, auto gain)
+  // because those features are designed for voice calls and they DESTROY the sharp
+  // transient spike that makes a dap detectable. We also add a high-pass filter
+  // to cut out low-frequency fan/HVAC rumble (below 1000 Hz).
+  let highPassFilter = null;
+
   async function setupAudio() {
     if (audioContext) return true;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // CRITICAL: disable all browser audio processing
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // High-pass filter: cuts everything below 1000 Hz
+      // Daps live at 2-5 kHz, fan noise lives at 63-500 Hz
+      // This one filter eliminates most background noise
+      highPassFilter = audioContext.createBiquadFilter();
+      highPassFilter.type = 'highpass';
+      highPassFilter.frequency.value = 1000;
+      highPassFilter.Q.value = 0.7;
+
       analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 2048; // bigger window = more detail for analysis
+
       microphone = audioContext.createMediaStreamSource(stream);
-      microphone.connect(analyser);
+      microphone.connect(highPassFilter);  // mic → filter out low rumble
+      highPassFilter.connect(analyser);     // filtered signal → analyser
       return true;
     } catch (e) {
       alert('DapMeUp needs microphone access to measure your dap! Check your browser settings.');
@@ -374,53 +399,144 @@
     const btn = document.getElementById('dapBtn');
     const meter = document.getElementById('liveMeter');
     const meterFill = document.getElementById('liveMeterFill');
+    const rankEl = document.getElementById('rank');
     
     btn.classList.add('listening');
-    btn.textContent = '3';
     meter.classList.add('active');
 
-    let peakLevel = 0;
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    const bufferLength = analyser.fftSize;
+    const timeData = new Float32Array(bufferLength);
 
-    // Countdown
-    let countdown = 3;
-    const countInterval = setInterval(() => {
-      countdown--;
-      if (countdown > 0) {
-        btn.textContent = countdown;
-      } else {
-        btn.textContent = 'DAP!';
+    // --- PHASE 1: Measure ambient noise for 1 second ---
+    // This creates our "noise floor" — anything below this level is just room noise
+    btn.textContent = '...';
+    rankEl.textContent = 'Calibrating...';
+    rankEl.className = 'rank rank-0';
+
+    let ambientPeak = 0;
+    let ambientSamples = 0;
+    let ambientRmsSum = 0;
+    const calibrateStart = Date.now();
+
+    await new Promise(resolve => {
+      function calibrate() {
+        analyser.getFloatTimeDomainData(timeData);
+        let sumSq = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          sumSq += timeData[i] * timeData[i];
+        }
+        const rms = Math.sqrt(sumSq / bufferLength);
+        ambientRmsSum += rms;
+        ambientSamples++;
+
+        // Also track peak during calibration
+        for (let i = 0; i < bufferLength; i++) {
+          const abs = Math.abs(timeData[i]);
+          if (abs > ambientPeak) ambientPeak = abs;
+        }
+
+        if (Date.now() - calibrateStart < 1000) {
+          requestAnimationFrame(calibrate);
+        } else {
+          resolve();
+        }
       }
-    }, 1000);
+      calibrate();
+    });
 
-    // Monitor audio levels for 3 seconds
-    const startTime = Date.now();
-    
+    const ambientRmsAvg = ambientRmsSum / ambientSamples;
+    // Noise floor = ambient peak + margin. Anything below this is ignored.
+    const noiseFloor = ambientPeak * 1.5;
+
+    // --- PHASE 2: Countdown 3-2-1 (NOT listening yet) ---
+    rankEl.textContent = 'Get ready...';
+    btn.textContent = '3';
+
+    await new Promise(resolve => {
+      let countdown = 3;
+      const countInterval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+          btn.textContent = countdown;
+        } else {
+          clearInterval(countInterval);
+          resolve();
+        }
+      }, 1000);
+    });
+
+    // --- PHASE 3: DAP NOW! Listen for 3 seconds ---
+    btn.textContent = '🔥';
+    rankEl.textContent = '🎤 DAP NOW!';
+    let bestDapScore = 0;
+    const listenStart = Date.now();
+
     function monitor() {
-      analyser.getByteFrequencyData(dataArray);
-      
-      // Get current level (average of frequencies)
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
+      analyser.getFloatTimeDomainData(timeData);
+
+      // --- Measure peak amplitude ---
+      let peak = 0;
+      let sumSq = 0;
+      for (let i = 0; i < bufferLength; i++) {
+        const abs = Math.abs(timeData[i]);
+        if (abs > peak) peak = abs;
+        sumSq += timeData[i] * timeData[i];
       }
-      const avg = sum / dataArray.length;
-      const level = Math.min(100, (avg / 128) * 100);
-      
-      // Update live meter
-      meterFill.style.width = level + '%';
-      
-      // Track peak
-      if (level > peakLevel) {
-        peakLevel = level;
+      const rms = Math.sqrt(sumSq / bufferLength);
+
+      // --- Crest factor: how "spiky" is the sound? ---
+      // Daps have huge crest factor (peak way above average)
+      // Fan noise has low crest factor (peak ≈ average)
+      const crestFactor = rms > 0.0001 ? peak / rms : 0;
+
+      // --- Zero-crossing rate: how "broadband" is the sound? ---
+      // Daps have lots of zero-crossings (chaotic broadband noise)
+      // Fan hum has few (smooth, tonal)
+      let zeroCrossings = 0;
+      for (let i = 1; i < bufferLength; i++) {
+        if ((timeData[i] >= 0 && timeData[i - 1] < 0) ||
+            (timeData[i] < 0 && timeData[i - 1] >= 0)) {
+          zeroCrossings++;
+        }
+      }
+      const zcrRate = zeroCrossings / bufferLength;
+
+      // --- Is this a dap? ---
+      // Must pass ALL checks:
+      // 1. Peak is above the noise floor (louder than ambient)
+      // 2. Crest factor > 4 (spiky, not continuous)
+      // 3. Zero-crossing rate > 0.1 (broadband, not tonal hum)
+      const aboveNoise = peak > noiseFloor;
+      const isSpiky = crestFactor > 4;
+      const isBroadband = zcrRate > 0.1;
+
+      // Live meter shows peak relative to noise floor
+      const meterLevel = Math.min(100, ((peak - noiseFloor) / (1.0 - noiseFloor)) * 100);
+      meterFill.style.width = Math.max(0, meterLevel) + '%';
+
+      if (aboveNoise && isSpiky && isBroadband) {
+        // This frame looks like a dap! Score it.
+        // Score based on how far above the noise floor the peak is
+        const signalAboveNoise = peak - noiseFloor;
+        const maxPossible = 1.0 - noiseFloor;
+        const normalized = Math.min(1, signalAboveNoise / maxPossible);
+        
+        // Apply curve: makes high scores harder
+        const curved = Math.pow(normalized, 0.7) * 100;
+        
+        if (curved > bestDapScore) {
+          bestDapScore = curved;
+        }
       }
 
-      if (Date.now() - startTime < 3000) {
+      if (Date.now() - listenStart < 3000) {
         animFrame = requestAnimationFrame(monitor);
       } else {
-        // Done listening
-        clearInterval(countInterval);
-        finishDap(Math.round(peakLevel));
+        // Cap at 99 normally, 100 only for extreme daps
+        let finalScore = Math.min(99, Math.round(bestDapScore));
+        if (bestDapScore >= 98) finalScore = 100;
+        if (bestDapScore < 1) finalScore = 0;
+        finishDap(finalScore);
       }
     }
 
