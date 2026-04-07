@@ -310,7 +310,7 @@
   <div class="instructions">
     Tap the button → wait for countdown → DAP when you see 🔥<br>
     Hold phone close for best results.<br><br>
-    v0.3.1 · Koster Games LLC™
+    v0.4 · Koster Games LLC™
   </div>
 </div>
 
@@ -329,14 +329,17 @@
   document.getElementById('bestScore').innerHTML = `Personal Best: <span>${personalBest}</span>`;
 
   // --- RANK SYSTEM ---
+  // Hand progression: your hands level up as your daps get louder
   const ranks = [
-    { min: 0,  label: 'Ghost Dap 👻', css: 'rank-0' },
-    { min: 15, label: 'Baby Tap 🍼', css: 'rank-1' },
-    { min: 30, label: 'Decent 👋', css: 'rank-1' },
-    { min: 45, label: 'Solid 🤝', css: 'rank-2' },
-    { min: 60, label: 'Crispy 🔥', css: 'rank-3' },
-    { min: 75, label: 'Thunderclap ⚡', css: 'rank-4' },
-    { min: 90, label: 'DAP GOD 👑', css: 'rank-5' },
+    { min: 0,  label: 'Ghost Hands 👻', css: 'rank-0' },
+    { min: 10, label: 'Paper Hands 🧻', css: 'rank-0' },
+    { min: 20, label: 'Baby Hands 🍼', css: 'rank-1' },
+    { min: 35, label: 'Bronze Hands 🤚', css: 'rank-1' },
+    { min: 50, label: 'Silver Hands 🪩', css: 'rank-2' },
+    { min: 65, label: 'Golden Hands ✋✨', css: 'rank-3' },
+    { min: 78, label: 'Diamond Hands 💎', css: 'rank-4' },
+    { min: 88, label: 'Wing Hands 🪽🔥', css: 'rank-4' },
+    { min: 95, label: 'DAP GOD 👑💥', css: 'rank-5' },
   ];
 
   function getRank(score) {
@@ -521,8 +524,9 @@
         const maxPossible = 1.0 - noiseFloor;
         const normalized = Math.min(1, signalAboveNoise / maxPossible);
         
-        // Apply curve: makes high scores harder
-        const curved = Math.pow(normalized, 0.7) * 100;
+        // Apply curve: makes high scores MUCH harder
+        // pow(x, 1.5) compresses the top end — you need insane volume for 90+
+        const curved = Math.pow(normalized, 1.5) * 100;
         
         if (curved > bestDapScore) {
           bestDapScore = curved;
