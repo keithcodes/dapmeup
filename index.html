@@ -269,6 +269,78 @@
       letter-spacing: 1px;
       text-transform: uppercase;
     }
+
+    /* Floating hand character */
+    .hand-character {
+      position: fixed;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      text-align: center;
+      z-index: 5;
+      transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .hand-emoji {
+      font-size: 3.5rem;
+      filter: drop-shadow(0 0 15px rgba(255, 107, 43, 0.3));
+      transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      animation: hand-float 3s ease-in-out infinite;
+    }
+
+    @keyframes hand-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .hand-label {
+      font-family: 'Dela Gothic One', sans-serif;
+      font-size: 0.5rem;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-top: 4px;
+    }
+
+    .hand-character.rank-up {
+      animation: hand-rank-up 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes hand-rank-up {
+      0% { transform: translateY(-50%) scale(1); }
+      50% { transform: translateY(-50%) scale(1.5); }
+      100% { transform: translateY(-50%) scale(1); }
+    }
+
+    /* Tips section */
+    .tips-toggle {
+      font-size: 0.75rem;
+      color: var(--orange);
+      cursor: pointer;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 8px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .tips {
+      display: none;
+      text-align: left;
+      width: 100%;
+      max-width: 300px;
+    }
+
+    .tips.show { display: block; }
+
+    .tip {
+      font-size: 0.7rem;
+      color: var(--gray);
+      padding: 6px 0;
+      border-bottom: 1px solid #1a1a2e;
+      line-height: 1.5;
+    }
+
+    .tip b { color: var(--white); }
   </style>
 </head>
 <body>
@@ -307,11 +379,29 @@
 
   <div class="best" id="bestScore">Personal Best: <span>0</span></div>
 
+  <div class="tips-toggle" onclick="document.getElementById('tips').classList.toggle('show')">
+    💡 Dap Tips
+  </div>
+  <div class="tips" id="tips">
+    <div class="tip">👐 <b>Cup your hands</b> — trap air between palms for a louder pop</div>
+    <div class="tip">⚡ <b>Speed matters</b> — faster hands = louder crack. Commit to it!</div>
+    <div class="tip">🎯 <b>Flat palms</b> — hit with full palm contact, not just fingers</div>
+    <div class="tip">📐 <b>Angle it</b> — slight angle traps more air than perfectly parallel</div>
+    <div class="tip">💪 <b>Follow through</b> — don't pull back early, let the slap ring out</div>
+    <div class="tip">📱 <b>Phone close</b> — hold the phone 6 inches from the dap</div>
+  </div>
+
   <div class="instructions">
     Tap the button → wait for countdown → DAP when you see 🔥<br>
     Hold phone close for best results.<br><br>
-    v0.4 · Koster Games LLC™
+    v0.5 · Koster Games LLC™
   </div>
+</div>
+
+<!-- Floating hand character on the side -->
+<div class="hand-character" id="handCharacter">
+  <div class="hand-emoji" id="handEmoji">👻</div>
+  <div class="hand-label" id="handLabel">Ghost</div>
 </div>
 
 <div class="shockwave" id="shockwave"></div>
@@ -331,15 +421,15 @@
   // --- RANK SYSTEM ---
   // Hand progression: your hands level up as your daps get louder
   const ranks = [
-    { min: 0,  label: 'Ghost Hands 👻', css: 'rank-0' },
-    { min: 10, label: 'Paper Hands 🧻', css: 'rank-0' },
-    { min: 20, label: 'Baby Hands 🍼', css: 'rank-1' },
-    { min: 35, label: 'Bronze Hands 🤚', css: 'rank-1' },
-    { min: 50, label: 'Silver Hands 🪩', css: 'rank-2' },
-    { min: 65, label: 'Golden Hands ✋✨', css: 'rank-3' },
-    { min: 78, label: 'Diamond Hands 💎', css: 'rank-4' },
-    { min: 88, label: 'Wing Hands 🪽🔥', css: 'rank-4' },
-    { min: 95, label: 'DAP GOD 👑💥', css: 'rank-5' },
+    { min: 0,  label: 'Ghost Hands 👻', css: 'rank-0', hand: '👻', handLabel: 'Ghost' },
+    { min: 10, label: 'Paper Hands 🧻', css: 'rank-0', hand: '🧻', handLabel: 'Paper' },
+    { min: 20, label: 'Baby Hands 🍼', css: 'rank-1', hand: '🍼', handLabel: 'Baby' },
+    { min: 35, label: 'Bronze Hands 🤚', css: 'rank-1', hand: '🤚', handLabel: 'Bronze' },
+    { min: 50, label: 'Silver Hands 🪩', css: 'rank-2', hand: '🪩', handLabel: 'Silver' },
+    { min: 65, label: 'Golden Hands ✋✨', css: 'rank-3', hand: '✋', handLabel: 'Golden' },
+    { min: 78, label: 'Diamond Hands 💎', css: 'rank-4', hand: '💎', handLabel: 'Diamond' },
+    { min: 88, label: 'Wing Hands 🪽🔥', css: 'rank-4', hand: '🪽', handLabel: 'Wings' },
+    { min: 95, label: 'DAP GOD 👑💥', css: 'rank-5', hand: '👑', handLabel: 'DAP GOD' },
   ];
 
   function getRank(score) {
@@ -583,6 +673,16 @@
     const rank = getRank(score);
     rankEl.textContent = rank.label;
     rankEl.className = 'rank ' + rank.css;
+
+    // Update floating hand character
+    const handChar = document.getElementById('handCharacter');
+    const handEmoji = document.getElementById('handEmoji');
+    const handLabelEl = document.getElementById('handLabel');
+    handEmoji.textContent = rank.hand;
+    handLabelEl.textContent = rank.handLabel;
+    handChar.classList.remove('rank-up');
+    void handChar.offsetWidth;
+    handChar.classList.add('rank-up');
 
     // Shockwave effect for big daps
     if (score >= 50) {
