@@ -394,7 +394,7 @@
   <div class="instructions">
     Tap the button → wait for countdown → DAP when you see 🔥<br>
     Hold phone close for best results.<br><br>
-    v0.5 · Koster Games LLC™
+    v0.5.1 · Koster Games LLC™
   </div>
 </div>
 
@@ -597,11 +597,11 @@
       // --- Is this a dap? ---
       // Must pass ALL checks:
       // 1. Peak is above the noise floor (louder than ambient)
-      // 2. Crest factor > 4 (spiky, not continuous)
-      // 3. Zero-crossing rate > 0.1 (broadband, not tonal hum)
+      // 2. Crest factor > 8 (very spiky — daps are 20+, yelling is only 4-6)
+      // 3. Zero-crossing rate > 0.15 (broadband, not tonal like voice)
       const aboveNoise = peak > noiseFloor;
-      const isSpiky = crestFactor > 4;
-      const isBroadband = zcrRate > 0.1;
+      const isSpiky = crestFactor > 8;
+      const isBroadband = zcrRate > 0.15;
 
       // Live meter shows peak relative to noise floor
       const meterLevel = Math.min(100, ((peak - noiseFloor) / (1.0 - noiseFloor)) * 100);
@@ -614,9 +614,10 @@
         const maxPossible = 1.0 - noiseFloor;
         const normalized = Math.min(1, signalAboveNoise / maxPossible);
         
-        // Apply curve: makes high scores MUCH harder
-        // pow(x, 1.5) compresses the top end — you need insane volume for 90+
-        const curved = Math.pow(normalized, 1.5) * 100;
+        // Apply curve: makes high scores INSANELY hard
+        // pow(x, 2.5) means you need ~60% of max signal just to hit 50
+        // and ~85% of max to hit 75. 90+ is legendary.
+        const curved = Math.pow(normalized, 2.5) * 100;
         
         if (curved > bestDapScore) {
           bestDapScore = curved;
@@ -626,9 +627,9 @@
       if (Date.now() - listenStart < 3000) {
         animFrame = requestAnimationFrame(monitor);
       } else {
-        // Cap at 99 normally, 100 only for extreme daps
+        // Cap at 99 normally, 100 only for a truly maxed-out mic
         let finalScore = Math.min(99, Math.round(bestDapScore));
-        if (bestDapScore >= 98) finalScore = 100;
+        if (bestDapScore >= 99.5) finalScore = 100;
         if (bestDapScore < 1) finalScore = 0;
         finishDap(finalScore);
       }
